@@ -50,6 +50,8 @@
 
 #define TIM12_PRESCALER 3
 
+#define GET_QEI_FEEDBACK (TIM3->CNT + qeiFeedback)
+
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 int32_t qeiFeedback = 0;
@@ -102,16 +104,18 @@ int main(void)
 	QEI1_init ();
 	StepperFeedback_init();
 	
-	while (1){
-		USART_puts ("Hello world\r\n");
-	}
-	
-	while (1);
+
+	printf ("Hello world\r\n");
 	
 	// ON motor coil
 	MOTOR_COIL_ON;
-	
 	frequency = 700;
+	runStepper (MOTOR_FORWARD, frequency);
+	
+	while (1){
+		printf ("Vexta feedback = %u, QEI feedback = %d\r\n", vextaFeedback, GET_QEI_FEEDBACK);
+		delay_ms(100);
+	}
 	while (1){
 		runStepper (MOTOR_FORWARD, frequency);
 		while (TAIL_SENSOR != Bit_RESET);
@@ -162,6 +166,12 @@ void Usart2_init(uint32_t baudrate)
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
+	
+	/* Connect PA2 to COMM_PORT_Tx*/
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_USART2);
+	
+	/* Connect PA3 to COMM_PORT_Rx*/
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_USART2);
 
 	/* Enable USART2 clock */
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
