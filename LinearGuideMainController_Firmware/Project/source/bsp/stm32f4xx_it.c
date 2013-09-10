@@ -23,6 +23,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_it.h"
+#include "stepper.h"
+#include "serialcom.h"
 
 /** @addtogroup STM32F4_Discovery_Peripheral_Examples
   * @{
@@ -36,6 +38,7 @@
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
@@ -160,6 +163,46 @@ void SysTick_Handler(void)
 /*void PPP_IRQHandler(void)
 {
 }*/
+
+/**
+  * @brief  Encoder1 interrupt update
+  * @param  void
+  * @retval void
+  */
+void TIM3_IRQHandler(void)
+{
+	TIM_ClearFlag(TIM3, TIM_FLAG_Update);
+	if (TIM3->CR1&0x10)
+		qeiFeedback -= 16000;
+	else
+		qeiFeedback += 16000;
+}
+
+/**
+  * @brief  This function handles External Line13 interrupt request.
+  * @param  None
+  * @retval None
+  */
+void EXTI15_10_IRQHandler(void)
+{
+	if(EXTI_GetITStatus(EXTI_Line13) != RESET){
+		vextaFeedback++;
+		/* Clear the EXTI line 0 pending bit */
+		EXTI_ClearITPendingBit(EXTI_Line13);
+	}
+}
+
+/**
+  * @brief  This function handles USART2 global interrupt request.
+  * @param  None
+  * @retval None
+  */
+void USART2_IRQHandler(void)
+{
+	if(USART_GetITStatus(USART2, USART_IT_RXNE) == SET){
+		UsartRxCallback(USART_ReceiveData (USART2));
+	}
+}
 
 /**
   * @}
