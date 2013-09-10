@@ -39,7 +39,6 @@
 #define TAIL_SENSOR GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_5)
 
 #define GET_QEI_FEEDBACK (TIM3->CNT + qeiFeedback)
-#define RESET_QEI_FEEDBACK TIM3->CNT = 0; qeiFeedback = 0;
 
 extern int32_t qeiFeedback;
 extern uint32_t vextaFeedback;
@@ -51,7 +50,13 @@ void QEI1_init (void);
 void TIM12_CH1_PWM_OUT (uint16_t frequency, uint8_t dutyCycle);
 void TIM12_CH2_PWM_OUT (uint16_t frequency, uint8_t dutyCycle);
 void runStepper (uint8_t direction, uint16_t speed);
+
 int32_t getQeiFeedback (void);
+void resetQeiFeedback (void);
+uint32_t getVextaFeedback (void);
+void resetVextaFeedback (void);
+float getPosition (void);
+void resetPosition (void);
 
 void linearGuideHome (void);
 void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance);

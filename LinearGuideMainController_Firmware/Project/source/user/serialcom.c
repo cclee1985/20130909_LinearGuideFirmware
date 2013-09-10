@@ -1,14 +1,14 @@
 #include <string.h>
+#include <stdlib.h>
 #include "serialcom.h"
 
-static uint8_t usartRawMessage[200] = {0};
+static char usartRawMessage[200] = {0};
 
 static char *my_strtok(char *s1, char *s2);
 
 /**
   * @brief  USART2 peripheral initialization
-  * @param  baudrate --> the baudrate at which the USART is
- * 						   supposed to operate
+  * @param  baudrate --> the baudrate at which the USART is supposed to operate
   * @retval void
   */
 void Usart2_init(uint32_t baudrate)
@@ -103,14 +103,30 @@ void UsartRxCallback (uint8_t data)
 	}
 }
 
+/**
+  * @brief  This function parse the raw usart message into details information.
+  * @param  message:  pointer to serialMessage structure. where it holds the extracted data
+											from raw usart message.
+  * @retval 0 or 1. 0 = success, 1 = nothing has been received, or data parsing error.
+  */
 uint8_t parseSerialMessage (PSER_MSG message)
 {
+	char *tempPtr;
+	
 	if (usartRawMessage[0] == 0)
 		return 1;
-	if(strncmp(&usartRawMessage[1], "$HOME", 5) == 0)		// it is home command
+	if(strncmp(&usartRawMessage[1], "$HOME", 5) == 0)					// it is home command
 		message->command = COMMAND_HOME;
-	else if(strncmp(&usartRawMessage[1], "$STEP", 5) == 0)		// it is home command
+	else if(strncmp(&usartRawMessage[1], "$STEP", 5) == 0){		// it is home command
+		my_strtok (&usartRawMessage[1], ","); 									//get $STEP
 		message->command = COMMAND_STEP;
+		
+		tempPtr = my_strtok (0, ",");					// pointer to speed string
+		message->speed = atoi(tempPtr);				// convert string to integer
+		
+		tempPtr = my_strtok (0, "\r");					// pointer to speed string
+		message->distance = atoi(tempPtr);				// convert string to integer
+	}
 	else
 		return 1;
 	
@@ -121,7 +137,7 @@ uint8_t parseSerialMessage (PSER_MSG message)
 
 /*****************************************************************************************
  unsigned char *my_strtok(*ptr, unsigned char term)
- arguments : ptr to a string, term to token, with 0 as first argument, starts searching from the saved pointer.
+ param : ptr to a string, term to token, with 0 as first argument, starts searching from the saved pointer.
  return pointer of the string token. null if end of string. and term if there is no char btw 2 delims
 *****************************************************************************************/
 static char *my_strtok(char *s1, char *s2)

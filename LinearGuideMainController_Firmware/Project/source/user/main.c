@@ -1,7 +1,7 @@
 /**
 *****************************************************************************
 **
-**	Author: Lee Chee Cheong. Latest Update 9 September 2013, 10:29p.m.
+**	Author: Lee Chee Cheong. Latest Update 10 September 2013, 11.32p.m.
 **
 **  File        : main.c
 **
@@ -39,6 +39,21 @@
 **	- 1mm = 16 pulses to Stepper, 2 vextaFeedback, or 80 QEI Feedback.
 **	- 1mm/s = 16 Hz. Minimum Velocity = 50mm/s = 800Hz.
 **	- Dr Koo's Spec: max speed 200mm/s (3200Hz), resolution 1mm
+**
+**	Serial Communication Protocol
+**	From PC --------> Microcontroller
+**	- "$HOME\r"	- Perform Homing Action
+**	- "$STEP,<speed>,<distance>\r" - Perform step action, with user define speed 
+**																   and distance
+**
+**	From Microcontroller ------------> PC
+**	- "$LG,<distance from home in mm>,<head sensor>,<tail sensor>\r"
+**
+**	Sensor and Moving Direction Description
+**	One end with TWO supporting point = HEAD
+**	The other end with ONLY ONE Supporting point = TAIL
+**	Movement from HEAD ----> TAIL  = MOVING FORWARD
+**	Movement from TAIL ----> HEAD  = MOVING BACKWARD
 *****************************************************************************
 */
 
@@ -121,39 +136,30 @@ int main(void)
 			linearGuideStep (MOTOR_FORWARD, 50, 1000);		// move motor forward, 50mm/s, 25mm distance
 			delay_ms(1000);
 			linearGuideHome ();														// home the linear guide
+			delay_ms(1000);
+			resetQeiFeedback();														// reset QEI feedback to 0
+			resetVextaFeedback();													// reset Vexta feedback to 0
+			resetPosition ();															// reset position to 0.0mm.
+			
+			// feedback to PC on machine status
+			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);
 		}
 		// perform homing action here
 		else if (serialMsg.command == COMMAND_STEP){
-			linearGuideStep (MOTOR_FORWARD, 50, 1000);		// move motor forward, 50mm/s, 25mm distance
+			linearGuideStep (MOTOR_FORWARD, serialMsg.speed, serialMsg.distance);		// move motor forward, 50mm/s, 25mm distance
+			// feedback to PC on machine status
+			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);
 		}
 	}
-	
-	/***************************** DEBUG PROGRAM **************************************/
-	// ON motor coil
-// 	MOTOR_COIL_ON;
-// 	frequency = 1000;
-// 	while (1){
-// 		runStepper (MOTOR_BACKWARD, frequency);
-// 		while (HEAD_SENSOR != Bit_RESET){
-// 			printf ("Vexta feedback = %u, QEI feedback = %d\r\n", vextaFeedback, GET_QEI_FEEDBACK);
-// 			delay_ms(100);
-// 		}
-// 		
-// 		runStepper (MOTOR_STOP, frequency);
-// 		delay_ms(1000);
-// 		
-// 		runStepper (MOTOR_FORWARD, frequency);
-// 		while (TAIL_SENSOR != Bit_RESET){
-// 			printf ("Vexta feedback = %u, QEI feedback = %d\r\n", vextaFeedback, GET_QEI_FEEDBACK);
-// 			delay_ms(100);
-// 		}
-// 		
-// 		runStepper (MOTOR_STOP, frequency);
-// 		delay_ms(1000);
-// 	}
+
 	while (1);				// program shouldn't reach here
 }
 
+/**
+  * @brief  GPIO Configuration. Configure 4 LEDs as output, head and tail sensor, motor coil on/off pin
+  * @param  None
+  * @retval None
+  */
 void GPIO_Configuration(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -174,6 +180,8 @@ void GPIO_Configuration(void)
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE);
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
 	
+	//HEAD_SENSOR = (GPIOB, GPIO_Pin_11)
+	//TAIL_SENSOR = (GPIOE, GPIO_Pin_5)
 	/* Configure PE5, input pull up */
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;
@@ -201,6 +209,12 @@ void GPIO_Configuration(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 }
 
+/**
+* @brief  Inserts a estimated delay time in uS. CPU FREQ = 168MHz. This is not an accurate delay
+					Do not use this function for high accuracy application
+* @param  nus: specifies the delay time in micro second.
+* @retval None
+*/
 void Delaynus(vu32 nus)
 {
     uint8_t nCount;
@@ -209,7 +223,8 @@ void Delaynus(vu32 nus)
 }
 
 /**
-* @brief  Inserts a estimated delay time in mS. CPU FREQ = 168MHz
+* @brief  Inserts a estimated delay time in mS. CPU FREQ = 168MHz. This is not an accurate delay
+					Do not use this function for high accuracy application
 * @param  miliseconds: specifies the delay time in mili second.
 * @retval None
 */

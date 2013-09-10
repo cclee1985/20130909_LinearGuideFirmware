@@ -7,7 +7,14 @@ extern void delay_ms(uint32_t miliseconds);
 
 int32_t qeiFeedback = 0;
 uint32_t vextaFeedback = 0;
+float lgPosition = 0.0;
 
+/**
+  * @brief  This function is to initialize pwm output for stepper motor.
+						In this code, pwm always 50%, ONLY frequency changes
+  * @param  None
+  * @retval None
+  */
 void PWM_init(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -57,6 +64,12 @@ void PWM_init(void)
 	TIM_Cmd(TIM12, DISABLE);
 }
 
+/**
+  * @brief  This function is to initialize vexta excitation timing output
+						to be captured using external interrupt
+  * @param  None
+  * @retval None
+  */
 void StepperFeedback_init (void)
 {
 	EXTI_InitTypeDef   EXTI_InitStructure;
@@ -95,7 +108,8 @@ void StepperFeedback_init (void)
 
 
 /**
-  * @brief  Encoder1 timer initialization
+  * @brief  This function initialises quadrature encoder input to capture
+						AB phase output from ENB encoder. 
   * @param  void
   * @retval void
   * @brief
@@ -163,6 +177,11 @@ void QEI1_init (void)
 	TIM_Cmd(TIM3, ENABLE);
 }
 
+/**
+  * @brief  This function returns qei feedback to user. No conversion to mm is done here
+  * @param  None
+  * @retval integer value of encoder reading
+  */
 int32_t getQeiFeedback (void)
 {
 	int32_t result;
@@ -170,6 +189,76 @@ int32_t getQeiFeedback (void)
 	return result;
 }
 
+/**
+  * @brief  This function resets qei feedback reading, and restart to count from 0
+  * @param  None
+  * @retval None
+  */
+void resetQeiFeedback (void)
+{
+	// record travalled distance
+	lgPosition += (float)(getQeiFeedback())/80.0f;		// 1 mm = 80 QEI Feedback
+	
+	// reset the timer
+	TIM_Cmd(TIM3, DISABLE);
+	TIM3->CNT = 0;
+	qeiFeedback = 0;
+	TIM_Cmd(TIM3, ENABLE);
+}
+
+/**
+  * @brief  This function returns excitation timing to user.
+						No conversion to mm is done here
+  * @param  None
+  * @retval integer value of timing input.
+  */
+uint32_t getVextaFeedback (void)
+{
+	return vextaFeedback;
+}
+
+/**
+  * @brief  This function resets timing feedback reading, and restart to count from 0
+  * @param  None
+  * @retval None
+  */
+void resetVextaFeedback (void)
+{
+	vextaFeedback = 0;
+}
+
+/**
+  * @brief  This function returns current position to user, which has been converted to mm
+  * @param  None
+  * @retval floating point value in unit mm
+  */
+float getPosition (void)
+{
+	float currentPosition;
+
+	currentPosition = (float)(getQeiFeedback())/80.0f;		// 1 mm = 80 QEI Feedback
+	currentPosition += lgPosition;											// lgPosition is recorded travelled distance where
+																											// user has already reset the QEI Feedback
+	return currentPosition;
+}
+
+/**
+  * @brief  This function resets current position to 0.
+						CALL THIS FUNCTION ONLY WHEN YOU DO HOMING.
+  * @param  None
+  * @retval None
+  */
+void resetPosition (void)
+{
+	lgPosition = 0.0;
+}
+
+/**
+  * @brief  This function output a signal with user define frequency and duty cycle to CH1
+  * @param  frequency: user define frequency. Minimum 500Hz
+	* @param  dutyCycle: user define dutyCycle. 0-100
+  * @retval None
+  */
 void TIM12_CH1_PWM_OUT (uint16_t frequency, uint8_t dutyCycle)
 {
 	TIM_OCInitTypeDef  TIM_OCInitStructure;
@@ -212,6 +301,12 @@ void TIM12_CH1_PWM_OUT (uint16_t frequency, uint8_t dutyCycle)
 	TIM_Cmd(TIM12, ENABLE);
 }
 
+/**
+  * @brief  This function output a signal with user define frequency and duty cycle to CH2
+  * @param  frequency: user define frequency. Minimum 500Hz
+	* @param  dutyCycle: user define dutyCycle. 0-100
+  * @retval None
+  */
 void TIM12_CH2_PWM_OUT (uint16_t frequency, uint8_t dutyCycle)
 {
 	TIM_OCInitTypeDef  TIM_OCInitStructure;
@@ -254,8 +349,18 @@ void TIM12_CH2_PWM_OUT (uint16_t frequency, uint8_t dutyCycle)
 	TIM_Cmd(TIM12, ENABLE);
 }
 
+/**
+  * @brief  This function output a signal with user define frequency and duty cycle to CH1
+  * @param  direction: MOTOR_FORWARD, MOTOR_BACKWARD, or MOTOR_STOP
+	* @param  speed: speed in Hertz. Minimum 500
+  * @retval None
+  */
 void runStepper (uint8_t direction, uint16_t speed)
 {
+	// due to prescaler setting, minimum speed = 500Hz
+	if (speed < 500)
+		speed = 500;
+	
 	// the output is inverted, thus 100% duty cycle = 0% duty in actual.
 	if (direction == MOTOR_FORWARD){
 		TIM12_CH1_PWM_OUT(speed, 50);
@@ -284,8 +389,8 @@ void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
 	int32_t distanceInPulse;
 	uint16_t speedInHz;
 	speedInHz = speed*16;							// Convert speed into Hertz. 1mm/s = 16Hz
-																				// 1mm = 16 pulses
-	RESET_QEI_FEEDBACK;										// reset QEI feedback
+																		// 1mm = 16 pulses
+	resetQeiFeedback();								// reset QEI feedback
 	
 	if (direction == MOTOR_FORWARD){
 		// If the tail sensor is on, mean the it reaches the maximum, do nothing and return
@@ -336,7 +441,6 @@ void linearGuideHome (void)
 	MOTOR_COIL_ON;
 	runStepper (MOTOR_BACKWARD, 700);
 	while (HEAD_SENSOR != Bit_RESET){
-		printf ("Vexta feedback = %u, QEI feedback = %d\r\n", vextaFeedback, GET_QEI_FEEDBACK);
 		delay_ms(100);
 	}
 	delay_ms(500);
